@@ -1,0 +1,77 @@
+🧠 Python Networking & Sockets
+📌 Beginner-friendly tutorial
+
+👉 Python Socket Programming (guide) — a solid intro to TCP sockets, servers, clients, and how Python’s socket API works.
+Great for grasping the basics: how connections work, how to send/receive bytes, etc.
+https://realpython.com/python-sockets/?utm_source=chatgpt.com
+
+🌀 Async I/O with Python
+📌 Official Python docs
+
+👉 asyncio streams documentation — shows how to build TCP clients/servers with asyncio, the primitives (StreamReader/StreamWriter) you’ll use in your project.
+This is exactly the level you’ll need for writing your proxy with async networking.
+https://docs.python.org/3/library/asyncio-stream.html?utm_source=chatgpt.com
+
+🌐 HTTP Protocol Deep Dives
+📌 Build from scratch
+
+👉 HTTP from scratch with Python sockets — a guide (blog) that walks through sending/parsing raw HTTP requests and responses.
+Useful for learning how HTTP messages are structured and processed under the hood.
+https://hakk.dev/blog/posts/http-from-scratch-python-sockets/?utm_source=chatgpt.com
+
+🧩 Proxies & HTTP Concepts
+📌 Concept overview
+
+👉 Proxies, reverse proxies, load balancers — explains what they are and the differences between forward vs reverse proxies at a high level.
+Good for understanding why proxies exist and what they’re used for.
+https://medium.com/%40nomannayeem/proxies-reverse-proxies-and-load-balancers-simplifying-web-traffic-like-a-pro-4d48bc1400b5
+
+📚 Web Server Foundations
+📌 Web server internals
+
+👉 Building a web server from scratch (series) — although not a proxy tutorial, it teaches how to design and implement HTTP handling from first principles.
+That background will give you deeper context before you start proxy code.
+https://dev.to/dmytro_huz/building-your-own-web-server-part-1-theory-and-foundations-3kgo?utm_source=chatgpt.com
+
+🎥 (Optional) Video Resource
+📌 Async server explained
+
+There’s a YouTube tutorial showing how to write an async server socket in Python — useful if you like seeing code in action.
+https://www.youtube.com/watch?v=KFRi5ruK90I
+
+🔭 Extra advanced options (if you want them)
+
+Twisted networking framework — if later you want to explore another event-driven approach in Python.
+
+Squid proxy — a real world C++ proxy you can study as reference.
+
+🧠 Suggested study order
+
+Python sockets basics — server, client, recv/send.
+
+asyncio streams — listen, accept, read/write concurrently.
+
+HTTP structure & parsing — requests, headers, bodies.
+
+Proxy concepts — forward vs reverse, routing.
+
+Build tiny echo server/client → simple HTTP parser → proxy basics.
+
+
+
+Books on the topic:
+📚 How to Use These Together
+
+Here’s a progression that works well for your project:
+
+Start with HTTP basics
+— High Performance Browser Networking or the HTTP parts of HTTP: The Definitive Guide
+
+Build strong socket fundamentals
+— UNIX Network Programming
+
+Apply it in Python
+— Python Network Programming Cookbook
+
+Deepen your systems awareness
+— Systems Performance
