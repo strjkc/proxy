@@ -1,0 +1,49 @@
+
+Milestone A (6–8h): dumb TCP forwarder (no HTTP parsing)
+Accept a client connection
+Open a connection to upstream
+Pipe bytes both ways until one side closes
+✅ Done when: curl through it works for simple GET.
+What you learn: streaming + backpressure + half-close issues.  --> Done
+
+Milestone B (8–10h): HTTP request parsing + rewriting
+Parse request headers
+Rewrite:
+Host to upstream host
+add X-Forwarded-For
+optionally force Connection: close to simplify early
+✅ Done when: you can route based on path later, and logs show method/path.
+What you learn: parsing, header normalization, security limits.                 --> Header normalization, when parsing i need to implement basic controlls like read from buffer based on body length from headers
+
+Milestone C (6–8h): timeouts + basic protections
+Header read timeout (slowloris defense)
+Max header bytes (e.g. 32KB)
+Upstream connect timeout + response inactivity timeout
+✅ Done when: a “hanging upstream” doesn’t hang your server forever.
+
+Milestone D (6–8h): simple routing + health checks
+Route /api/* to upstream A, /static/* to upstream B
+Background task: periodic GET /health
+If unhealthy, return 503 immediately
+✅ Done when: killing upstream flips health within N seconds.
+
+Milestone E (4–6h): observability
+JSON logs: request_id, upstream, latency_ms, bytes_in/out, error
+/metrics endpoint: counters + simple latency buckets
+✅ Done when: you can see request counts and failures.
+
+“Cool to show off” bonus (optional if time remains)
+Pick ONE:
+Connection pooling (reuse upstream connections) → teaches a lot
+Least-connections balancing (if you add multiple upstreams)
+Tiny in-memory cache for GET with TTL
+
+
+
+za sada moze:
+da primi i parsira http request
+da prosledi request serveru sa modifikovanih hederima
+da primi resp od servera
+da parsira reply
+da prosledi reply klijentu
+da timeoutuje socket ako je inaktivan odredjeni br sekundi
