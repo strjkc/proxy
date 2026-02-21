@@ -52,6 +52,22 @@ JSON logs: request_id, upstream, latency_ms, bytes_in/out, error
 /metrics endpoint: counters + simple latency buckets
 ✅ Done when: you can see request counts and failures.
 
+
+Accept a client connection - c mag
+Open a connection to upstream - c mag
+Pipe bytes both ways until one side closes - c mag
+Parse request headers - parsing lib koju koriste konekcije
+Host to upstream host - c mag
+add X-Forwarded-For - konekcija
+Header read timeout (slowloris defense) - c mag vodi racuna na osnovu propertyja konekacija
+Max header bytes (e.g. 32KB) - konekcija
+Upstream connect timeout + response inactivity timeout - c mag
+Route /api/* to upstream A, /static/* to upstream B - c mag
+Background task: periodic GET /health - nezavisan servis koji koristi konekcije i c_mag
+If unhealthy, return 503 immediately - c_mag signalizira konekciji da treba da uradi to
+JSON logs: request_id, upstream, latency_ms, bytes_in/out, error - logovanje za konekcije
+/metrics endpoint: counters + simple latency buckets- nezavisan servis koji koristi konekciju 
+
 “Cool to show off” bonus (optional if time remains)
 Pick ONE:
 Connection pooling (reuse upstream connections) → teaches a lot
@@ -135,3 +151,20 @@ Apply it in Python
 
 Deepen your systems awareness
 — Systems Performance
+
+
+
+
+
+Kokencija ima socket in i out buffer - moze da bude izmedju klijenta i proxyja i proxyja i servera
+konekcija ne moze da uspostavlja novu konekciju, ali moze da upisuje u svoj buffer i salje iz njega. ima 2 buffera, jedan za primanje requesta, jedan u koji upisuje responseve koji treba da se salju
+konekcija obmotava jedan socket, ona iz svojih bufera moze da cita/upisuje u buffer socketa.
+konekcija ima svoje timeout vreme.
+
+connection manager moze da otvara konekcije i prosledjuje podatke od jedne do druge konekcije. kada stigne zahtev, mi pravimo novu conn manager instancu, on dobija socket za zahtev i pravi novu logicku koneciju izmedju proxyja i klijenta, kada imamo read event
+c mag ce da pozove na client konekciji metode koje ce da omoguce konekciji da cita i parsira poruku, c_mag dobija http message objekat, pravi novu instancu logicke konekcije ka serveru i poziva metode te konekcije da posalje poruke na server.
+
+
+
+konekcija ne cita nista iz socket buffera? 
+proxy sesija se sastoji od dve konekcije. Proxy sesija moze da uspostavlja nove konekcije 

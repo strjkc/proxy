@@ -1,5 +1,8 @@
+import logging
 import time
 import errno
+
+logger = logging.getLogger(__name__)
 
 
 class C_Mag_Connection:
@@ -25,9 +28,21 @@ class C_Mag:
                 return
         raise ValueError("Socket not found")
 
+    def obj_exists(self, socket):
+        sockets = [connection.socket for connection in self.connections]
+        if socket in sockets:
+            return True
+        return False
+
     def reap_connections(self):
-        for connection in self.connections:
+        for connection in self.connections[:]:
             timeout = time.time() - connection.last_active_time
+            print(
+                f"for socket: {connection.socket} Last active time {connection.last_active_time}, current: {time.time()} time diff is : {timeout} and cleanup should occur when {connection.timeout}"
+            )
+            logger.info(
+                f"for socket: {connection.socket} Last active time {connection.last_active_time}, current: {time.time()} time diff is : {timeout} and cleanup should occur when {connection.timeout}"
+            )
             if timeout > connection.timeout:
                 try:
                     print(f"Closing connection {connection.socket}")
