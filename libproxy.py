@@ -30,8 +30,8 @@ class Message:
         self.connection_manager = connection_manager
         self.selector = selector
         self.c_sock = socket
-        self.c_idle_time = 2
-        self.s_idle_time = 2
+        self.c_idle_time = 10
+        self.s_idle_time = 5
         self.c_last_activity = 0
         self.s_last_activity = 0
         self.s_sock = None
@@ -47,7 +47,7 @@ class Message:
         self.request_ready = False
         self.req_started_at = None
         self.reply_started_at = None
-        self.max_header_len = 32 * 1024
+        self.max_header_len = 8 * 1024
         self.route_map = route_map
         self.addr_for_route = ""
         self.upstream_status = upstream_status
@@ -67,6 +67,8 @@ class Message:
         self.c_sock.send(data)
 
     def _send_timeout_reply(self):
+        self.s_sock.shutdown(socket.SHUT_WR)
+        print("Client is taking too long to transmit the message")
         data = b"HTTP/1.1 408 Request Timeout\r\nConection: close\r\n\r\n"
         self.c_sock.sendall(data)
 
@@ -93,7 +95,7 @@ class Message:
         delimiter = b"\r\n\r\n"
         if delimiter not in buffer:
             if len(buffer) > self.max_header_len:
-                self._send_long_headers()
+                raise ValueError("Headers too long")
             logger.debug("uuuu no delimiter in request :(")
             return
         if not self.req_headers:
@@ -105,7 +107,7 @@ class Message:
                 self.req_body = None
                 return
             # do we have a body?
-            if "content-type" in self.req_headers:
+            if "Content-Type" in self.req_headers:
                 c_length = int(self.req_headers["Content-Length"])
                 b_body = self.c_inb[:c_length]
                 self.c_inb = self.c_inb[c_length:]
@@ -128,9 +130,7 @@ class Message:
                 logger.debug(
                     f"Upstream sent headers taht exceed {self.max_header_len}, connection closed"
                 )
-                self.selector.unregister(self.s_sock)
-                self.s_sock.close()
-                self._send_server_timeout()
+                raise ValueError("Server Headers too long")
             return
         if not self.reply_headers:
             self.reply_headers = self._parse_resp_headers()
@@ -172,9 +172,9 @@ class Message:
         if len(f_arr) != 3:
             raise ValueError("Invalid headers")
         proto, code, message = self._validate_response_headers(f_arr)
-        parsed["proto"] = proto
-        parsed["code"] = code
-        parsed["message"] = message
+        parsed["Proto"] = proto
+        parsed["Code"] = code
+        parsed["Message"] = message
         for header in arr:
             k, v = header.split(": ")
             k = self._normalize_header_key(k)
@@ -192,9 +192,9 @@ class Message:
         if len(f_arr) != 3:
             raise ValueError("Invalid headers")
         method, path, protocol = self._validate_headers(f_arr)
-        parsed["method"] = method
-        parsed["path"] = path
-        parsed["proto"] = protocol
+        parsed["Method"] = method
+        parsed["Path"] = path
+        parsed["Proto"] = protocol
         for header in arr:
             k, v = header.split(": ")
             k = self._normalize_header_key(k)
@@ -240,6 +240,8 @@ class Message:
             raise ValueError("Invalid HTTP Method Used")
         if protocol != "HTTP/1.1":
             raise ValueError("Invalid Protocol")
+        if "/" not in path:
+            raise ValueError("Invalid Path Format")
         return method, path, protocol
 
     def _serialize_req(self):
@@ -254,9 +256,9 @@ class Message:
             self.req_headers["X-Forwarded-For"] = hosts
         logger.debug(f"Forwarded for: {self.req_headers['X-Forwarded-For']}")
         ###
-        method = self.req_headers.pop("method")
-        path = self.req_headers.pop("path")
-        proto = self.req_headers.pop("proto")
+        method = self.req_headers.pop("Method")
+        path = self.req_headers.pop("Path")
+        proto = self.req_headers.pop("Proto")
         header_lines.append(f"{method} {path} {proto}")
         for k, v in self.req_headers.items():
             header_lines.append(f"{k}: {v}")
@@ -270,10 +272,10 @@ class Message:
             elif content_type == "text/html":
                 body = self.req_body.encode()
 
-        final = header
+        final = header + b"\r\n\r\n"
         if body:
-            final += b"\r\n\r\n" + body
-        self.s_outb += final + b"\r\n\r\n"
+            final += body
+        self.s_outb += final  # + b"\r\n\r\n"
         logger.debug("Serialization done")
 
     def _serialize_resp(self):
@@ -284,18 +286,20 @@ class Message:
             content_type = self.reply_headers["Content-Type"]
             if "application/json" in content_type:
                 # self.reply_body["proxy"] = "signed"
-                body = json.dumps(self.reply_body, ensure_ascii=False).encode()
+                body = json.dumps(
+                    self.reply_body, separators=(",", ":"), ensure_ascii=False
+                ).encode()
             elif "text/html" in content_type:
                 body = self.reply_body.encode()
                 # body += b"<p>Proxy signed</p>"
         logger.debug(f" Headers: {self.reply_headers}")
         self.reply_headers["Content-Length"] = len(body)
-        proto = self.reply_headers.pop("proto")
-        code = self.reply_headers.pop("code")
-        message = self.reply_headers.pop("message")
+        proto = self.reply_headers.pop("Proto")
+        code = self.reply_headers.pop("Code")
+        message = self.reply_headers.pop("Message")
         header_lines.append(f"{proto} {code} {message}")
         for k, v in self.reply_headers.items():
-            header_lines.append(f"{k}: {v}")
+            header_lines.append(f"{k}:{v}")
         header_string = "\r\n".join(header_lines)
         header = header_string.encode()
         final = header + b"\r\n\r\n"
@@ -336,6 +340,7 @@ class Message:
         else:
             self.connection_manager.modify_last_act_time(self.c_sock, time.time())
         logger.info("Receiving request from client")
+        print("Receiving request from client")
         data = self.c_sock.recv(4096)
         logger.info(f"Data read from socket buffer: {data}")
         if data:
@@ -376,10 +381,10 @@ class Message:
             if not self.reply_started_at:
                 self.reply_started_at = time.time()
             elapsed = time.time() - self.reply_started_at
-            if elapsed >= 12:
+            if elapsed >= 5:
+                self._send_server_timeout()
                 self.selector.unregister(self.s_sock)
                 self.s_sock.close()
-                self._send_server_timeout()
             logger.debug(f"reading data {data}")
             self.s_inb += data
             logger.info(f"State of Server In Buffer {self.s_inb}")
@@ -421,7 +426,7 @@ class Message:
                     logger.debug(
                         f"headers in request:{self.req_headers} body in request:{self.req_body}"
                     )
-                    path = self.req_headers.get("path", None)
+                    path = self.req_headers.get("Path", None)
                     if path == "/pmetrics":
                         self._send_metrics()
                         return
@@ -483,6 +488,13 @@ class Message:
                 logger.info(f"Request with id: {self.req_uuid} ending")
                 self._init()
                 self.c_last_activity = time.time()
+        except ValueError as e:
+            if str(e) == "Headers too long":
+                self._send_long_headers()
+            elif str(e) == "Server Headers too long":
+                self.selector.unregister(self.s_sock)
+                self.s_sock.close()
+                self._send_server_timeout()
         except Exception as e:
             logger.debug(f"Something went wrong yo: {e}")
             traceback.print_exc()

@@ -37,20 +37,21 @@ class C_Mag:
     def reap_connections(self):
         for connection in self.connections[:]:
             timeout = time.time() - connection.last_active_time
-            print(
-                f"for socket: {connection.socket} Last active time {connection.last_active_time}, current: {time.time()} time diff is : {timeout} and cleanup should occur when {connection.timeout}"
-            )
-            logger.info(
-                f"for socket: {connection.socket} Last active time {connection.last_active_time}, current: {time.time()} time diff is : {timeout} and cleanup should occur when {connection.timeout}"
-            )
+            # print(
+            #    f"for socket: {connection.socket} Last active time {connection.last_active_time}, current: {time.time()} time diff is : {timeout} and cleanup should occur when {connection.timeout}"
+            # )
+            # logger.info(
+            #    f"for socket: {connection.socket} Last active time {connection.last_active_time}, current: {time.time()} time diff is : {timeout} and cleanup should occur when {connection.timeout}"
+            # )
             if timeout > connection.timeout:
                 try:
                     print(f"Closing connection {connection.socket}")
                     self.selector.unregister(connection.socket)
                     connection.socket.close()
                     self.connections.remove(connection)
-                except (OSError, ValueError):
+                except (OSError, ValueError) as e:
                     print(f"Connection {connection.socket} already closed")
+                    print(e)
                     self.connections.remove(connection)
                 except Exception as e:
                     print(f"C_Mag reap error {e} {type(e).__name__}")

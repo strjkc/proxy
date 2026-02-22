@@ -14,6 +14,7 @@ add X-Forwarded-For
 optionally force Connection: close to simplify early
 ✅ Done when: you can route based on path later, and logs show method/path.
 What you learn: parsing, header normalization, security limits.                 --> Done
+
 Milestone C (6–8h): timeouts + basic protections
 Header read timeout (slowloris defense)
 Max header bytes (e.g. 32KB)
@@ -28,7 +29,7 @@ If unhealthy, return 503 immediately --> response is sent but socket remains ope
 
 Milestone E (4–6h): observability
 JSON logs: request_id, upstream, latency_ms, bytes_in/out, error -> Done
-/metrics endpoint: counters + simple latency buckets 
+/metrics endpoint: counters + simple latency buckets  -- Done
 ✅ Done when: you can see request counts and failures.
 
 “Cool to show off” bonus (optional if time remains)
@@ -37,4 +38,46 @@ Connection pooling (reuse upstream connections) → teaches a lot
 Least-connections balancing (if you add multiple upstreams)
 Tiny in-memory cache for GET with TTL
 
+Tests:
+Unit:
+  Parsing:
+    Incoming Request:
+      Valid:
+        can be parsed correctly - headers only
+        can be parsed correctly - headers and body - done
+      Invalid:
+        erronious first line: - done
+          Unsupported method
+          missing all 3 elements
+          elements are jumbled
+        error returned - missing mandatory headers
+        missing header terminator \r\n\r\n - just returns, because we continue reading from buffer untill the marker is present - but not when parsing, when parssing has started we must have this
+        headers are not sepearated by \r\n so an error is returned - NIY
+        headers too large while reading message - done
+        Multiple same headers with different values- not implemented yet
+        Multiple same headers with same values - NIY
+    Creating Requests:
+      Proxy headers are added -done
+    Incoming Replies:
+      Correct reply with body
+      Invalid headers - first line
+    Creating Replies:
+      just a basic test
+  Connection reaping - Done
+  Server finding based on header routes
+  Get health requests are sent - done
+  Buffers are not unbound - not implemented
+    
+
+E2E:
+  Timeouts: - small client needed
+    Too long to transmit headers - client and server
+    Connection idle for too long - client and server
+    When the client sends EOF/FIN/b'' the server should close it's side of the connection imediately
+
+  Test using requests lib:
+    metrics 
+    client can get from server
+    client can post to server
+  Health status is updated  
 
