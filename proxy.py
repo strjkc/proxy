@@ -1,52 +1,13 @@
 import logging
+import traceback
 import selectors
 import socket
 import types
-import libproxy
-from connection_manager import C_Mag
+from health_check import Health_Check
+
+# import libproxy
+from connection_manager import Connection_Manager
 import time
-
-
-def check_health(curr_time, upstreams, timeout):
-    for k, v in upstreams.items():
-        diff = curr_time - v.checked
-        if diff > timeout:
-            print(f"diff is: {diff}, sending check")
-            send_health_check(k)
-            v.checked = time.time()
-
-
-def recv_health_status(key, mask):
-    sock = key.fileobj
-    conn_data = key.data
-    data = sock.recv(4096)
-    if data:
-        conn_data.inb += data
-        if b"\r\n\r\n" in conn_data.inb:
-            status = b"200" in conn_data.inb
-            # print(f"response to health check from server {key.data.addr} is {key.data}")
-            # print(f"status is: {status}")
-            upstream_status[conn_data.addr].status = status
-            upstream_status[conn_data.addr].checked = time.time()
-        print(f"Upstream status: {upstream_status}")
-
-
-def send_health_check(addr):
-    print(f"Checking health for server: {addr}")
-    msg = b"HEAD /health HTTP/1.1\r\nHost:127.0.0.1\r\n\r\n"
-    try:
-        conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        data = types.SimpleNamespace(addr=addr, inb=b"")
-        conn.connect(addr)
-        conn.setblocking(False)
-        conn.sendall(msg)
-        selector.register(conn, selectors.EVENT_READ, data=data)
-    except ConnectionRefusedError as e:
-        print("Unable to connect to server, server is unhealthy")
-        upstream_status[addr].status = False
-        upstream_status[addr].checked = time.time()
-    except Exception as e:
-        print(e)
 
 
 def handle_accept(socket):
@@ -55,15 +16,8 @@ def handle_accept(socket):
     conn.setblocking(False)
     print(f"Client conection to proxy established for: {addr}")
     # "127.0.0.1:8080" - should be removed
-    data = libproxy.Message(
-        conn,
-        selector,
-        "127.0.0.1:8080",
-        c_mag,
-        upstream_rutes,
-        upstream_status,
-        buckets,
-    )
+    data = Connection_Manager(selector, conn, upstream_status, buckets)
+    connection_managers.append(data)
     event = selectors.EVENT_READ
     selector.register(conn, event, data=data)
 
@@ -83,29 +37,15 @@ buckets = {
     0.2: 0,
     0.5: 0,
     1: 0,
+    10: 0,
 }
-
-upstream_rutes = {
-    "/app": ("127.0.0.1", 8080),
-    "/app/": ("127.0.0.1", 8080),
-    "/api/chirps": ("127.0.0.1", 8081),
-    "/api/chirps/": ("127.0.0.1", 8081),
-}
-# test routes
-# upstream_rutes = {
-#    "/app/": ("127.0.0.1", 8585),
-#    "/app": ("127.0.0.1", 8585),
-# }
 
 upstream_status = {
     ("127.0.0.1", 8080): types.SimpleNamespace(status=True, checked=time.time()),
     ("127.0.0.1", 8081): types.SimpleNamespace(status=True, checked=time.time()),
-    # ("127.0.0.1", 8585): types.SimpleNamespace(status=True, checked=time.time()),
 }
 
-c_mag = C_Mag(selector)
-
-use_check_health = True
+connection_managers = []
 
 
 def main():
@@ -116,27 +56,40 @@ def main():
     sock.setblocking(False)
     selector.register(sock, selectors.EVENT_READ, data=None)
     print(f"Proxy listening on port {port}")
+    hc = Health_Check(upstream_status, selector)
 
     try:
         while True:
-            # time.sleep(1)
-            curr_time = time.time()
-            if use_check_health:
-                check_health(curr_time, upstream_status, 10)
-            c_mag.reap_connections()
-            events = selector.select(1)
+            events = selector.select(0.1)
+            hc.open_connections()
             if events:
                 for key, mask in events:
+                    # print(f"for event: key {key} mask {mask}")
+                    # print(f"for event: key data {key.data} mask {mask}")
                     if key.data is None:
+                        #  print(f"data is none {key.data}")
                         handle_accept(key.fileobj)
-                    elif isinstance(key.data, libproxy.Message):
-                        key.data.handle_connection(mask)
+                    elif isinstance(key.data, Connection_Manager):
+                        key.data.handle_connections(key, mask)
+                        # key.data.reap()
                     else:
-                        recv_health_status(key, mask)
+                        hc.handle_connections(key, mask)
+                        hc.reap()
+                        # else:
+                        # print("Recv health status")
+                        # recv_health_status(key, mask)
+            for c in connection_managers[:]:
+                c.reap()
+                if not c.connection_activity:
+                    print(f"active connection manager: {connection_managers}")
+                    print(f"activity state: {c.connection_activity}")
+                    print("removing connection")
+                    connection_managers.remove(c)
     except Exception as e:
         selector.unregister(sock)
         sock.close()
-        print(e)
+        print(f"An error in the main loop occured {e}")
+        print(traceback.print_exc())
 
 
 if __name__ == "__main__":
