@@ -54,8 +54,8 @@ class Connection_Manager:
         keys = list(self.connection_activity.keys())
         for k in keys:
             curr_time = time.time()
-            timeout_value = self.connection_activity[k]
-            if curr_time - timeout_value >= k.idle_time:
+            last_active_time = self.connection_activity[k]
+            if curr_time - last_active_time >= k.idle_time:
                 try:
                     print(f"removing socket due to inactivity {k.socket}")
                     self.selector.unregister(k.socket)
@@ -78,6 +78,7 @@ class Connection_Manager:
         try:
             if event & selectors.EVENT_READ and fileobj is self.client_socket:
                 if not self.client_connection:
+                    print("opening new client connection")
                     self.client_connection = Connection(self.client_socket, 5, 5)
                 print("receiving request")
                 self.req_received_at = time.time()
@@ -87,10 +88,9 @@ class Connection_Manager:
                     self.selector.unregister(self.client_socket)
                     self.client_socket.close()
                     return
-                # print("setting data")
                 self.set_req_data(headers, body)
                 if self.request_data.headers:
-                    print("ready to send request")
+                    print("ready to send request to server")
                     h_path = self.request_data.headers["Path"]
                     if h_path == "/pmetrics":
                         headers = responses.get_metrics_data()
@@ -103,11 +103,33 @@ class Connection_Manager:
                         return
                     addr = self.upstream_rutes.get(h_path, None)
                     if addr is None:
-                        raise ValueError("Unknown Route")
+                        data = responses.get_route_not_found_data()
+                        self.set_resp_data(data, "<h1>Unknown Route</h1>")
+                        is_done = self.client_connection.send_response(
+                            self.response_data, self.set_activity
+                        )
+                        if is_done:
+                            return
+                        else:
+                            raise RuntimeError(
+                                "Sending response for unkown route failed"
+                            )
                     if not self.is_upstream_active(addr):
-                        raise ConnectionError("Upstream unavailable")
+                        data = responses.get_upstream_unavailable_data()
+                        self.set_resp_data(data, "<h1>Unavailable</h1>")
+                        is_done = self.client_connection.send_response(
+                            self.response_data, self.set_activity
+                        )
+                        if is_done:
+                            return
+                        else:
+                            raise RuntimeError(
+                                "Sending response for upstream down failed"
+                            )
                     if not self.server_connection:
+                        print("opening new server connection")
                         self.open_connection(addr)
+                        print(f"new server socket is: {self.server_socket}")
                     else:
                         self.selector.modify(
                             self.server_socket, selectors.EVENT_WRITE, data=self
@@ -122,9 +144,7 @@ class Connection_Manager:
                         selectors.EVENT_WRITE,
                         data=self,
                     )
-                    # print("done receiving from server")
             elif event & selectors.EVENT_WRITE and fileobj is self.client_socket:
-                # print(f"data before sending for serialization: {self.response_data}")
                 print("sending reply to client")
                 is_done = self.client_connection.send_response(
                     self.response_data, self.set_activity
@@ -147,7 +167,6 @@ class Connection_Manager:
                         selectors.EVENT_READ,
                         data=self,
                     )
-                print("sending done")
         except Exception as e:
             print(f"An Exception occured {e}")
         # print(traceback.print_exc())

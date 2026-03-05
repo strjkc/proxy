@@ -15,7 +15,6 @@ def handle_accept(socket):
     logger.info("Connection accepted")
     conn.setblocking(False)
     print(f"Client conection to proxy established for: {addr}")
-    # "127.0.0.1:8080" - should be removed
     data = Connection_Manager(selector, conn, upstream_status, buckets)
     connection_managers.append(data)
     event = selectors.EVENT_READ
@@ -60,31 +59,21 @@ def main():
 
     try:
         while True:
+            for c in connection_managers[:]:
+                c.reap()
+                if not c.connection_activity:
+                    connection_managers.remove(c)
             events = selector.select(0.1)
             hc.open_connections()
             if events:
                 for key, mask in events:
-                    # print(f"for event: key {key} mask {mask}")
-                    # print(f"for event: key data {key.data} mask {mask}")
                     if key.data is None:
-                        #  print(f"data is none {key.data}")
                         handle_accept(key.fileobj)
                     elif isinstance(key.data, Connection_Manager):
                         key.data.handle_connections(key, mask)
-                        # key.data.reap()
                     else:
                         hc.handle_connections(key, mask)
                         hc.reap()
-                        # else:
-                        # print("Recv health status")
-                        # recv_health_status(key, mask)
-            for c in connection_managers[:]:
-                c.reap()
-                if not c.connection_activity:
-                    print(f"active connection manager: {connection_managers}")
-                    print(f"activity state: {c.connection_activity}")
-                    print("removing connection")
-                    connection_managers.remove(c)
     except Exception as e:
         selector.unregister(sock)
         sock.close()

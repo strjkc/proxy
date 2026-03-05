@@ -32,6 +32,8 @@ def get_upstream_unavailable_data():
         "Code": 503,
         "Message": "Service Unavailable",
         "Connection": "close",
+        "Content-Type": "text/html",
+        "Content-Length": 0,
     }
 
 
@@ -50,4 +52,6 @@ def get_route_not_found_data():
         "Code": 404,
         "Message": "Not Found",
         "Connection": "close",
+        "Content-Type": "text/html",
+        "Content-Length": 0,
     }

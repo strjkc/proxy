@@ -36,7 +36,6 @@ class Connection:
         i = buffer.index(self.header_delimiter)
         header_b = bytes(buffer[:i])
         del buffer[: i + len(self.header_delimiter)]
-        # print(f"After parsing headers this remains in the buffer {buffer}")
         return header_b
 
     def parse_request_headers(self):
@@ -56,7 +55,6 @@ class Connection:
                 return
             self.headers = parser.parse_response_headers(header_b)
             logger.info(f"headers parsed {self.headers}")
-            # print(f"In buffer after parsing headers: {self.inb}")
 
     # done
     def get_body_from_buffer(self, buffer, headers):
@@ -68,10 +66,8 @@ class Connection:
             if len(buffer) < c_length:
                 return
             c_type = headers.get("Content-Type", "text/html")
-            # print(f"buffer when starting to parse body: {buffer}")
             body_b = buffer[:c_length]
             del buffer[:c_length]
-            # print(f"body b {body_b}")
             body = parser.parse_body(body_b, c_type)
             logger.debug(f"body is : {body}")
         self.body = body
@@ -79,12 +75,10 @@ class Connection:
 
     # to finish
     def _validate_haning_time(self, timeout_s: int, actv_callback):
-        # print("checking hang time")
         if not self.req_started_at:
             self.req_started_at = time.time()
         elapsed = time.time() - self.req_started_at
         if elapsed >= timeout_s:
-            # print("should be timed out")
             # a hack for now :)
             actv_callback(self, time.time() - 10000000)
             # report to manager with reason why he should unregister this socket from the selector, and close it
@@ -93,7 +87,6 @@ class Connection:
     def receive_req(self, actv_callback) -> tuple:
         actv_callback(self, time.time())
         logger.info("Receiving request from client")
-        # print("Receiving request from client")
         try:
             data = self.socket.recv(4096)
         except Exception as e:
@@ -111,10 +104,10 @@ class Connection:
                 raise ValueError(
                     f"headers are falsy {self.headers} or body is none: {self.body}"
                 )
-            # print("returning header and body")
             headers, body = self._snapshot_state()
             self.headers = {}
             self.body = None
+            self.req_started_at = 0
             return headers, body
         else:
             logger.debug("Trying to read data, but the socket buffer is empty")
@@ -134,9 +127,7 @@ class Connection:
             logger.debug(f"reading data {data}")
             self.inb.extend(data)
             self.parse_reply_headers()
-            # print("headers parsed")
             self.get_body_from_buffer(self.inb, self.headers)
-            # print("body parsed")
             if not self.headers or self.body is None:
                 raise ValueError(
                     f"headers are falsy {self.headers} or body is none: {self.body}"
@@ -144,15 +135,13 @@ class Connection:
             headers, body = self._snapshot_state()
             self.headers = {}
             self.body = None
+            self.req_started_at = 0
             return headers, body
         else:
             logger.debug("Server in buffer empty, nothing to do here")
             return
 
     def send_request(self, data, actv_callback):
-        # todo get hostname and other sokcet stuff from manager
-        # print(f"socket from sedn {self.socket}")
-        # print(f"hostname from socket {socket.gethostbyname(socket.gethostname())}")
         data_b = parser.serialize_req(
             data.headers,
             data.body,
