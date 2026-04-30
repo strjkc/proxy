@@ -39,9 +39,9 @@ class TestSocket:
     #    partial headers
     #    headers only in socket - ok
     #    headers and partial body - we have headers, satte is parsing body, buffer is not empty
-    #    full socket - parsed message
+    #    full socket - parsed message - ok
     #    more than one message in the socket:
-    #    one full one headers only - parsed message, second itteration, headers only, body is none, buffer is empty
+    #    one full one headers only - parsed message, second itteration, headers only, body is none, buffer is empty - ok
     #    one full one headers and partial body - parsed message, second itteration, satte is parsing body, buffer is not empty
     #    two full messages - two messages, two itterations
     #    if we are parsing too long we expect some error
@@ -111,3 +111,50 @@ def test_full_msg():
     headers, body = conn.receive_req(cb)
     assert headers == expected["headers"]
     assert body == expected["body"]
+
+
+def test_full_msg_part_headers():
+    data = b"POST /api HTTP/1.1\r\n" \
+        b"Host:127.0.0.1:8080\r\n" \
+        b"User-Agent:ur mum\r\n" \
+        b"Accept:*/*\r\n" \
+        b"Accept-Encoding:gzip, deflate, br\r\n" \
+        b"Content-Type:application/json\r\n" \
+        b"Content-Length:32\r\n\r\n" \
+        b'{"id":23, "username":"testuser"}' \
+        b"POST /api HTTP/1.1\r\n" \
+        b"Host:127.0.0.1:8080\r\n" \
+        b"User-Agent:ur mum\r\n" \
+        b"Accept:*/*\r\n" \
+        b"Accept-Encoding:gzip, deflate, br\r\n\r\n"
+    expected = {"headers":{
+        "Method": "POST",
+        "Path": "/api",
+        "Proto": "HTTP/1.1",
+        "Host": "127.0.0.1:8080",
+        "User-Agent": "ur mum",
+        "Accept": "*/*",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Content-Type": "application/json",
+        "Content-Length": "32",
+    }, "body": {"id": 23, "username": "testuser"}}
+    expected2 = {
+        "Method": "POST",
+        "Path": "/api",
+        "Proto": "HTTP/1.1",
+        "Host": "127.0.0.1:8080",
+        "User-Agent": "ur mum",
+        "Accept": "*/*",
+        "Accept-Encoding": "gzip, deflate, br",
+    }
+    sock = TestSocket(data)
+    conn = Connection(sock, 100, 100)
+    cb = lambda a,b : print("testing")
+    headers, body = conn.receive_req(cb)
+    assert headers == expected["headers"]
+    assert body == expected["body"]
+    assert len(conn.inb) > 0
+    headers, body = conn.receive_req(cb)
+    assert headers == expected2
+    assert body is None
+    assert len(conn.inb) == 0
