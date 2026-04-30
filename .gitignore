@@ -2,3 +2,5 @@ __pycache__/*
 tests/__pycache__/*
 .idea/
 *.log
+__*
+*-info
