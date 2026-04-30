@@ -21,6 +21,7 @@ class Connection_Manager:
         self.request_data = types.SimpleNamespace(headers={}, body=None)
         self.response_data = types.SimpleNamespace(headers={}, body=None)
         self.connection_activity = {self.client_connection: time.time()}
+        # TODO: make it configurable
         self.upstream_rutes = {
             "/app": ("127.0.0.1", 8080),
             "/app/": ("127.0.0.1", 8080),
@@ -72,7 +73,6 @@ class Connection_Manager:
         self.server_connection = Connection(self.server_socket, 10, 10)
         self.selector.register(self.server_socket, selectors.EVENT_WRITE, data=self)
 
-    # open connection to server
     def handle_connections(self, key, event):
         fileobj = key.fileobj
         try:

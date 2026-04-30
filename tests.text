@@ -1,0 +1,89 @@
+parse request headers:
+valid headers
+valid headers but all lower caps
+all upper caps
+all mix caps
+
+invalid method
+invalid path
+invalid proto version
+invalid header format something like f = bla
+
+
+parse response headers:
+valid headers
+valid headers but all lower caps
+all upper caps
+all mix caps
+
+invalid method
+invalid path
+invalid proto version
+invalid header format something like f = bla
+
+parse body
+valid json format
+valid html
+not in json/html format
+
+
+serialize req
+
+serialize resp
+
+
+Connection tests:
+    receive req
+        empty socket
+        partial headers
+        headers only in socket
+        headers and partial body
+        full socket
+        more than one message in the socket:
+        one full one headers only
+        one full one headers and partial body
+        two full messages
+        if we are parsing too long we expect some error
+        we return current state to the manager and reset state
+    receive resp
+        its the same the only diff is the parser method
+    send req
+        we have a message in the buffer, we serailize another one, two messages in the buffer?
+        only diff is how we serialize
+    send resp
+
+
+
+    Case(
+        id="oversized header",
+        raw=(
+            b"GET /example/path HTTP/1.1\r\n"
+            b"Host: example.com\r\n"
+            b"User-Agent: CustomClient/1.0 (X11; Linux x86_64) ReverseProxyTestingSuite/2026.02\r\n"
+            b"Accept: application/json, text/plain, */*;q=0.8\r\n"
+            b"X-Long-Debug-Header: ThisIsAnExtremelyLongHeaderValueUsedForTestingParserLimitsAndBufferHandling1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ\r\n"
+            b"X-Correlation-ID: 9f8d7c6b5a4e3d2c1b0a9e8d7c6b5a4e\r\n"
+            b"X-Forwarded-For: 203.0.113.42, 198.51.100.17, 192.0.2.88\r\n"
+            b"X-Custom-Metadata: key1=value1; key2=value2; key3=value3; key4=value4; key5=value5\r\n"
+            b"Connection: keep-alive\r\n"
+            + b"X-Oversized-Header: "
+            + (b"A" * 9200)
+            + b"\r\n"
+        ),
+        expected={},
+    ),
+        Case(
+        id="no_header_delimiter",
+        raw=(
+            b"POST /api HTTP/1.1\r\n"
+            b"Host: 127.0.0.1:8080\r\n"
+            b"User-Agent: ur mum\r\n"
+            b"Accept: */*\r\n"
+            b"Accept-Encoding: gzip, deflate, br\r\n"
+            b"Content-Type: application/json\r\n"
+            b"Content-Length: 48\r\n"
+        ),
+        expected={},
+    ),
+
+

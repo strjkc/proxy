@@ -1,5 +1,5 @@
 import logging
-import parser
+from proxy.parser import Parser
 import socket
 import time
 
@@ -28,7 +28,7 @@ class Connection:
         self.header_delimiter = b"\r\n\r\n"
 
     # done
-    def get_headers_from_buffer(self, buffer, max_header_len: int):
+    def __get_headers_from_buffer(self, buffer, max_header_len: int):
         if self.header_delimiter not in buffer:
             if len(buffer) > max_header_len:
                 raise ValueError("Headers too long")
@@ -38,26 +38,26 @@ class Connection:
         del buffer[: i + len(self.header_delimiter)]
         return header_b
 
-    def parse_request_headers(self):
+    def __parse_request_headers(self):
         if not self.headers:
-            header_b = self.get_headers_from_buffer(self.inb, self.max_header_len)
+            header_b = self.__get_headers_from_buffer(self.inb, self.max_header_len)
             logger.info(f"header bytes returned {header_b}")
             if not header_b:
                 return
-            self.headers = parser.parse_request_headers(header_b, self.valid_methods)
+            self.headers = Parser.parse_request_headers(header_b, self.valid_methods)
             logger.info(f"headers parsed {self.headers}")
 
-    def parse_reply_headers(self):
+    def __parse_reply_headers(self):
         if not self.headers:
-            header_b = self.get_headers_from_buffer(self.inb, self.max_header_len)
+            header_b = self.__get_headers_from_buffer(self.inb, self.max_header_len)
             logger.info(f"header bytes returned {header_b}")
             if not header_b:
                 return
-            self.headers = parser.parse_response_headers(header_b)
+            self.headers = Parser.parse_response_headers(header_b)
             logger.info(f"headers parsed {self.headers}")
 
     # done
-    def get_body_from_buffer(self, buffer, headers):
+    def __get_body_from_buffer(self, buffer, headers):
         if not headers:
             return
         body = ""
@@ -68,7 +68,7 @@ class Connection:
             c_type = headers.get("Content-Type", "text/html")
             body_b = buffer[:c_length]
             del buffer[:c_length]
-            body = parser.parse_body(body_b, c_type)
+            body = Parser.parse_body(body_b, c_type)
             logger.debug(f"body is : {body}")
         self.body = body
         logger.info("parsed body")
@@ -83,7 +83,6 @@ class Connection:
             actv_callback(self, time.time() - 10000000)
             # report to manager with reason why he should unregister this socket from the selector, and close it
 
-    # done, remove comments if everyghing works
     def receive_req(self, actv_callback) -> tuple:
         actv_callback(self, time.time())
         logger.info("Receiving request from client")
@@ -98,20 +97,25 @@ class Connection:
             logger.debug("populating in buffer")
             self.inb.extend(data)
             logger.info(f"State of Client In Buffer: {self.inb}")
-            self.parse_request_headers()
-            self.get_body_from_buffer(self.inb, self.headers)
+            self.__parse_request_headers()
+            self.__get_body_from_buffer(self.inb, self.headers)
+            #headers are parsed?
+            #should we expect a body?
+            #if yes we need to set the state to parsing body - read the len from buffer based on content length
+            #if no, return if yes raise an exception that we are still buffering for the body
+            #body parsed? - just return
             if not self.headers or self.body is None:
                 raise ValueError(
                     f"headers are falsy {self.headers} or body is none: {self.body}"
                 )
-            headers, body = self._snapshot_state()
+            headers, body = self.__snapshot_state()
             self.headers = {}
             self.body = None
             self.req_started_at = 0
             return headers, body
         else:
+            raise ValueError("No Data in Socket")
             logger.debug("Trying to read data, but the socket buffer is empty")
-            return None, None
 
     def receive_resp(self, actv_callback):
         actv_callback(self, time.time())
@@ -126,13 +130,13 @@ class Connection:
             self._validate_haning_time(self.read_timeout, actv_callback)
             logger.debug(f"reading data {data}")
             self.inb.extend(data)
-            self.parse_reply_headers()
-            self.get_body_from_buffer(self.inb, self.headers)
+            self.__parse_reply_headers()
+            self.__get_body_from_buffer(self.inb, self.headers)
             if not self.headers or self.body is None:
                 raise ValueError(
                     f"headers are falsy {self.headers} or body is none: {self.body}"
                 )
-            headers, body = self._snapshot_state()
+            headers, body = self.__snapshot_state()
             self.headers = {}
             self.body = None
             self.req_started_at = 0
@@ -142,30 +146,36 @@ class Connection:
             return
 
     def send_request(self, data, actv_callback):
-        data_b = parser.serialize_req(
+        if "X-Forwarded-For" in self.headers:
+            self.headers["X-Forwarded-For"].append(
+                socket.gethostbyname(socket.gethostname())
+            )
+        else:
+            self.headers["X-Forwarded-For"] = self.socket.getpeername()[0]
+        logger.debug(f"Forwarded for: {self.headers['X-Forwarded-For']}")
+
+        data_b = Parser.serialize_req(
             data.headers,
             data.body,
-            socket.gethostbyname(socket.gethostname()),
-            self.socket.getpeername()[0],
         )
         self.outb.extend(data_b)
         actv_callback(self, time.time())
-        self._send_over_socket()
+        self.__send_over_socket()
         return True
 
     def send_response(self, data, actv_callback):
-        data_b = parser.serialize_resp(data.headers, data.body)
+        data_b = Parser.serialize_resp(data.headers, data.body)
         self.outb.extend(data_b)
         actv_callback(self, time.time())
-        self._send_over_socket()
+        self.__send_over_socket()
         return True
 
-    def _send_over_socket(self):
+    def __send_over_socket(self):
         logger.debug(f"Sending data: {self.outb}")
         sent = self.socket.send(self.outb)
         self.outb = self.outb[sent:]
 
-    def _snapshot_state(self):
+    def __snapshot_state(self):
         headers = dict(self.headers)
         body = None
         if isinstance(self.body, dict):

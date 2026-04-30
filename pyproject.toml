@@ -1,0 +1,35 @@
+[build-system]
+# Specifies the build backend (e.g., setuptools, flit, hatch, or poetry)
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "proxy"
+version = "0.1.0"
+description = "Reverse proxy in python"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+authors = [{ name = "Strahinja Jokic", email = "strahinja.jkc@gmail.com" }]
+
+# Core dependencies (replaces requirements.txt)
+dependencies = []
+
+[project.optional-dependencies]
+# Install with: pip install ".[dev]"
+dev = ["pytest >= 7.0", "ruff"]
+
+[project.scripts]
+# Creates a command-line command 'my-cli' that runs the 'main' function
+my-cli = "my_package.module:main"
+
+[tool.setuptools.packages.find]
+# Tells setuptools where to find your source code
+where = ["src"]
+
+[tool.ruff]
+line-length = 128
+
+[tool.pytest.ini_options]
+# Configuration for other tools like pytest
+testpaths = ["tests"]
