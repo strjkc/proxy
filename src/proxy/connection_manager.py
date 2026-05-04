@@ -31,24 +31,24 @@ class Connection_Manager:
         self.req_received_at = 0
         self.buckets = buckets
 
-    def update_buckets(self, time):
+    def __update_buckets(self, time):
         bukcet_keys = list(self.buckets.keys())
         index = bisect.bisect_left(bukcet_keys, time)
         self.buckets[bukcet_keys[index]] += 1
 
-    def is_upstream_active(self, addr):
+    def __is_upstream_active(self, addr):
         if addr in self.upstream_status:
             return self.upstream_status[addr].status
 
-    def set_req_data(self, headers, body):
+    def __set_req_data(self, headers, body):
         self.request_data.headers = headers
         self.request_data.body = body
 
-    def set_resp_data(self, headers, body):
+    def __set_resp_data(self, headers, body):
         self.response_data.headers = headers
         self.response_data.body = body
 
-    def set_activity(self, obj, last_act_time):
+    def __set_activity(self, obj, last_act_time):
         self.connection_activity[obj] = last_act_time
 
     def reap(self):
@@ -66,7 +66,7 @@ class Connection_Manager:
                 finally:
                     del self.connection_activity[k]
 
-    def open_connection(self, addr):
+    def __open_connection(self, addr):
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.connect(addr)
         self.server_socket.setblocking(False)
@@ -82,19 +82,20 @@ class Connection_Manager:
                     self.client_connection = Connection(self.client_socket, 5, 5)
                 print("receiving request")
                 self.req_received_at = time.time()
-                headers, body = self.client_connection.receive_req(self.set_activity)
+                headers, body = self.client_connection.receive_req(self.__set_activity)
                 if headers is None and body is None:
                     print("eof read, closing connection")
                     self.selector.unregister(self.client_socket)
                     self.client_socket.close()
                     return
-                self.set_req_data(headers, body)
+                self.__set_req_data(headers, body)
                 if self.request_data.headers:
+                    #TODO: check routing paths
                     print("ready to send request to server")
                     h_path = self.request_data.headers["Path"]
                     if h_path == "/pmetrics":
                         headers = responses.get_metrics_data()
-                        self.set_resp_data(headers, self.buckets)
+                        self.__set_resp_data(headers, self.buckets)
                         self.selector.modify(
                             self.client_socket,
                             selectors.EVENT_WRITE,
@@ -103,10 +104,11 @@ class Connection_Manager:
                         return
                     addr = self.upstream_rutes.get(h_path, None)
                     if addr is None:
+                        # TODO: extract
                         data = responses.get_route_not_found_data()
-                        self.set_resp_data(data, "<h1>Unknown Route</h1>")
+                        self.__set_resp_data(data, "<h1>Unknown Route</h1>")
                         is_done = self.client_connection.send_response(
-                            self.response_data, self.set_activity
+                            self.response_data, self.__set_activity
                         )
                         if is_done:
                             return
@@ -114,11 +116,11 @@ class Connection_Manager:
                             raise RuntimeError(
                                 "Sending response for unkown route failed"
                             )
-                    if not self.is_upstream_active(addr):
+                    if not self.__is_upstream_active(addr):
                         data = responses.get_upstream_unavailable_data()
-                        self.set_resp_data(data, "<h1>Unavailable</h1>")
+                        self.__set_resp_data(data, "<h1>Unavailable</h1>")
                         is_done = self.client_connection.send_response(
-                            self.response_data, self.set_activity
+                            self.response_data, self.__set_activity
                         )
                         if is_done:
                             return
@@ -128,7 +130,7 @@ class Connection_Manager:
                             )
                     if not self.server_connection:
                         print("opening new server connection")
-                        self.open_connection(addr)
+                        self.__open_connection(addr)
                         print(f"new server socket is: {self.server_socket}")
                     else:
                         self.selector.modify(
@@ -136,9 +138,10 @@ class Connection_Manager:
                         )
             elif event & selectors.EVENT_READ and fileobj is self.server_socket:
                 print("receiving from server")
-                headers, body = self.server_connection.receive_resp(self.set_activity)
+                #TODO: malformed response?
+                headers, body = self.server_connection.receive_resp(self.__set_activity)
                 if headers and body:
-                    self.set_resp_data(headers, body)
+                    self.__set_resp_data(headers, body)
                     self.selector.modify(
                         self.client_socket,
                         selectors.EVENT_WRITE,
@@ -147,9 +150,9 @@ class Connection_Manager:
             elif event & selectors.EVENT_WRITE and fileobj is self.client_socket:
                 print("sending reply to client")
                 is_done = self.client_connection.send_response(
-                    self.response_data, self.set_activity
+                    self.response_data, self.__set_activity
                 )
-                self.update_buckets(time.time() - self.req_received_at)
+                self.__update_buckets(time.time() - self.req_received_at)
                 if is_done:
                     self.selector.modify(
                         self.client_socket,
@@ -159,7 +162,7 @@ class Connection_Manager:
             elif event & selectors.EVENT_WRITE and fileobj is self.server_socket:
                 print("sending to server")
                 is_done = self.server_connection.send_request(
-                    self.request_data, self.set_activity
+                    self.request_data, self.__set_activity
                 )
                 if is_done:
                     self.selector.modify(
@@ -169,4 +172,8 @@ class Connection_Manager:
                     )
         except Exception as e:
             print(f"An Exception occured {e}")
+            if e == "Parsing":
+                pass
+            if e == "No Data in Socket":
+                raise ValueError("")
         # print(traceback.print_exc())

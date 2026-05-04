@@ -3,7 +3,7 @@ from proxy.parser import Parser
 import pytest
 from dataclasses import dataclass
 
-
+#TODO: serialization
 @dataclass
 class Case[T]:
     id: str

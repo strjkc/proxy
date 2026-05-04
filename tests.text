@@ -1,56 +1,5 @@
-parse request headers:
-valid headers
-valid headers but all lower caps
-all upper caps
-all mix caps
-
-invalid method
-invalid path
-invalid proto version
-invalid header format something like f = bla
 
 
-parse response headers:
-valid headers
-valid headers but all lower caps
-all upper caps
-all mix caps
-
-invalid method
-invalid path
-invalid proto version
-invalid header format something like f = bla
-
-parse body
-valid json format
-valid html
-not in json/html format
-
-
-serialize req
-
-serialize resp
-
-
-Connection tests:
-    receive req
-        empty socket
-        partial headers
-        headers only in socket
-        headers and partial body
-        full socket
-        more than one message in the socket:
-        one full one headers only
-        one full one headers and partial body
-        two full messages
-        if we are parsing too long we expect some error
-        we return current state to the manager and reset state
-    receive resp
-        its the same the only diff is the parser method
-    send req
-        we have a message in the buffer, we serailize another one, two messages in the buffer?
-        only diff is how we serialize
-    send resp
 
 
 

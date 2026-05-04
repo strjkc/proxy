@@ -1,11 +1,18 @@
 import logging
+from enum import Enum
 from proxy.parser import Parser
 import socket
 import time
 
 logger = logging.getLogger(__name__)
 
+class State(Enum):
+    HEADERS = 1
+    BODY = 2
+    COMPLETE = 3
 
+#TODO: implement states
+#TODO: implement returns as a ds and not as exceptions
 class Connection:
     def __init__(
         self,
@@ -26,6 +33,7 @@ class Connection:
         self.req_started_at = 0  # <-
         self.max_header_len = 8 * 1024  # <-
         self.header_delimiter = b"\r\n\r\n"
+        self.state = State.HEADERS
 
     # done
     def __get_headers_from_buffer(self, buffer, max_header_len: int):
@@ -83,67 +91,45 @@ class Connection:
             actv_callback(self, time.time() - 10000000)
             # report to manager with reason why he should unregister this socket from the selector, and close it
 
-    def receive_req(self, actv_callback) -> tuple:
-        actv_callback(self, time.time())
-        logger.info("Receiving request from client")
-        try:
-            data = self.socket.recv(4096)
-        except Exception as e:
-            print(f"Error reading data: {e}")
-            return None, None
-        logger.info(f"Data read from socket buffer: {data}")
-        if data:
+    def __receive(self, wrapping, actv_callback):
+            actv_callback(self, time.time())
+            logger.info("Receiving request from client")
+            try:
+                data = self.socket.recv(4096)
+            except Exception as e:
+                print(f"Error reading data: {e}")
+                return None, None
+            logger.info(f"Data read from socket buffer: {data}")
             self._validate_haning_time(self.read_timeout, actv_callback)
-            logger.debug("populating in buffer")
-            self.inb.extend(data)
-            logger.info(f"State of Client In Buffer: {self.inb}")
-            self.__parse_request_headers()
-            self.__get_body_from_buffer(self.inb, self.headers)
-            #headers are parsed?
-            #should we expect a body?
-            #if yes we need to set the state to parsing body - read the len from buffer based on content length
-            #if no, return if yes raise an exception that we are still buffering for the body
-            #body parsed? - just return
-            if not self.headers or self.body is None:
-                raise ValueError(
-                    f"headers are falsy {self.headers} or body is none: {self.body}"
-                )
-            headers, body = self.__snapshot_state()
-            self.headers = {}
-            self.body = None
-            self.req_started_at = 0
-            return headers, body
-        else:
-            raise ValueError("No Data in Socket")
-            logger.debug("Trying to read data, but the socket buffer is empty")
+            if data:
+                logger.debug("populating in buffer")
+                self.inb.extend(data)
+            if self.inb:
+                logger.info(f"State of Client In Buffer: {self.inb}")
+                wrapping()
+                #self.__parse_request_headers()
+                self.__get_body_from_buffer(self.inb, self.headers)
+                # if not headers raise valueerr
+                if self.headers:
+                    if self.headers.get("Content-Type"):
+                        if not self.body:
+                            # set state to parsing body
+                            raise ValueError("Parsing")
+                else:
+                    raise ValueError("Parsing")
+                headers, body = self.__snapshot_state()
+                self.headers = {}
+                self.body = None
+                self.req_started_at = 0
+                return headers, body
+            else:
+                raise ValueError("No Data in Socket")
+
+    def receive_req(self, actv_callback) -> tuple:
+        return self.__receive(self.__parse_request_headers, actv_callback)
 
     def receive_resp(self, actv_callback):
-        actv_callback(self, time.time())
-        logger.info("Receiving reply from server")
-        try:
-            data = self.socket.recv(4096)
-        except Exception as e:
-            print(f"Error reading data: {e}")
-            return
-        logger.info(f"Data read from socket buffer {data}")
-        if data:
-            self._validate_haning_time(self.read_timeout, actv_callback)
-            logger.debug(f"reading data {data}")
-            self.inb.extend(data)
-            self.__parse_reply_headers()
-            self.__get_body_from_buffer(self.inb, self.headers)
-            if not self.headers or self.body is None:
-                raise ValueError(
-                    f"headers are falsy {self.headers} or body is none: {self.body}"
-                )
-            headers, body = self.__snapshot_state()
-            self.headers = {}
-            self.body = None
-            self.req_started_at = 0
-            return headers, body
-        else:
-            logger.debug("Server in buffer empty, nothing to do here")
-            return
+        return self.__receive(self.__parse_reply_headers, actv_callback)
 
     def send_request(self, data, actv_callback):
         if "X-Forwarded-For" in self.headers:

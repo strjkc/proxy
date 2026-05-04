@@ -5,7 +5,6 @@ import socket
 import types
 from health_check import Health_Check
 
-# import libproxy
 from connection_manager import Connection_Manager
 import time
 
