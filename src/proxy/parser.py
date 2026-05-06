@@ -142,7 +142,7 @@ class Parser:
         return final
 
     @classmethod
-    def serialize_resp(cls, headers: dict, body: bytes | None):
+    def serialize_resp(cls, headers: dict, body: dict | str | None):
         logger.debug("serizalizing response")
         header_lines = []
         proto = headers.pop("Proto")
@@ -156,6 +156,10 @@ class Parser:
         final = header + b"\r\n\r\n"
         logger.debug(body)
         if body:
-            final += body
+            if headers["Content-Type"] == "application/json":
+                b = json.dumps(body).encode("utf-8")
+            elif headers["Content-Type"] == "text/hml":
+                b = body.encode("utf-8")
+            final += b
         logger.debug(f"Final message {final}")
         return final

@@ -4,8 +4,8 @@ import traceback
 import socket
 import types
 import time
-from connection import Connection
-import set_responses as responses
+from proxy.connection import Connection
+import proxy.set_responses as responses
 
 
 class Connection_Manager:
@@ -23,10 +23,10 @@ class Connection_Manager:
         self.connection_activity = {self.client_connection: time.time()}
         # TODO: make it configurable
         self.upstream_rutes = {
-            "/app": ("127.0.0.1", 8080),
-            "/app/": ("127.0.0.1", 8080),
-            "/api/chirps": ("127.0.0.1", 8081),
-            "/api/chirps/": ("127.0.0.1", 8081),
+            "/app": ("host.docker.internal", 8080),
+            "/app/": ("host.docker.internal", 8080),
+            "/api/chirps": ("host.docker.internal", 8081),
+            "/api/chirps/": ("host.docker.internal", 8081),
         }
         self.req_received_at = 0
         self.buckets = buckets

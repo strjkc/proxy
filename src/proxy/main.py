@@ -3,12 +3,13 @@ import traceback
 import selectors
 import socket
 import types
-from health_check import Health_Check
-
-from connection_manager import Connection_Manager
+from proxy.health_check import Health_Check
+from proxy.connection_manager import Connection_Manager
 import time
+from dotenv import load_dotenv
+import os
 
-
+load_dotenv()
 def handle_accept(socket):
     conn, addr = socket.accept()
     logger.info("Connection accepted")
@@ -21,11 +22,7 @@ def handle_accept(socket):
 
 
 logging.basicConfig(filename="./proxy.log", level=logging.INFO)
-
 selector = selectors.DefaultSelector()
-# TODO make configurable
-host = "127.0.0.1"
-port = 8181
 logger = logging.getLogger(__name__)
 
 buckets = {
@@ -38,18 +35,23 @@ buckets = {
     10: 0,
 }
 
-upstream_status = {
-    ("127.0.0.1", 8080): types.SimpleNamespace(status=True, checked=time.time()),
-    ("127.0.0.1", 8081): types.SimpleNamespace(status=True, checked=time.time()),
-}
+upstream_status = {}
 
 connection_managers = []
 
 
 def main():
+    ip = os.getenv("PROXY_IP")
+    port = int(os.getenv("PROXY_PORT"))
+    servers = os.getenv("SERVERS")
+    server_addrs = servers.split(";")
+    for addr in server_addrs:
+        s_host, s_port = addr.split(",")
+        t_addr = (s_host, int(s_port))
+        upstream_status[t_addr] = types.SimpleNamespace(status=True, checked=time.time())
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind((host, port))
+    sock.bind((ip, port))
     sock.listen()
     sock.setblocking(False)
     selector.register(sock, selectors.EVENT_READ, data=None)
