@@ -6,12 +6,11 @@ import types
 import time
 from proxy.connection import Connection
 import proxy.set_responses as responses
+import set_responses as responses
 
 
 class Connection_Manager:
-    def __init__(
-        self, selector, client_socket, upstream_status: dict, buckets: dict
-    ) -> None:
+    def __init__(self, selector, client_socket, upstream_status: dict, buckets: dict) -> None:
         self.upstream_status = upstream_status
         self.selector = selector
         self.client_socket = client_socket
@@ -90,7 +89,7 @@ class Connection_Manager:
                     return
                 self.__set_req_data(headers, body)
                 if self.request_data.headers:
-                    #TODO: check routing paths
+                    # TODO: check routing paths
                     print("ready to send request to server")
                     h_path = self.request_data.headers["Path"]
                     if h_path == "/pmetrics":
@@ -107,38 +106,28 @@ class Connection_Manager:
                         # TODO: extract
                         data = responses.get_route_not_found_data()
                         self.__set_resp_data(data, "<h1>Unknown Route</h1>")
-                        is_done = self.client_connection.send_response(
-                            self.response_data, self.__set_activity
-                        )
+                        is_done = self.client_connection.send_response(self.response_data, self.__set_activity)
                         if is_done:
                             return
                         else:
-                            raise RuntimeError(
-                                "Sending response for unkown route failed"
-                            )
+                            raise RuntimeError("Sending response for unkown route failed")
                     if not self.__is_upstream_active(addr):
                         data = responses.get_upstream_unavailable_data()
                         self.__set_resp_data(data, "<h1>Unavailable</h1>")
-                        is_done = self.client_connection.send_response(
-                            self.response_data, self.__set_activity
-                        )
+                        is_done = self.client_connection.send_response(self.response_data, self.__set_activity)
                         if is_done:
                             return
                         else:
-                            raise RuntimeError(
-                                "Sending response for upstream down failed"
-                            )
+                            raise RuntimeError("Sending response for upstream down failed")
                     if not self.server_connection:
                         print("opening new server connection")
                         self.__open_connection(addr)
                         print(f"new server socket is: {self.server_socket}")
                     else:
-                        self.selector.modify(
-                            self.server_socket, selectors.EVENT_WRITE, data=self
-                        )
+                        self.selector.modify(self.server_socket, selectors.EVENT_WRITE, data=self)
             elif event & selectors.EVENT_READ and fileobj is self.server_socket:
                 print("receiving from server")
-                #TODO: malformed response?
+                # TODO: malformed response?
                 headers, body = self.server_connection.receive_resp(self.__set_activity)
                 if headers and body:
                     self.__set_resp_data(headers, body)
@@ -149,9 +138,7 @@ class Connection_Manager:
                     )
             elif event & selectors.EVENT_WRITE and fileobj is self.client_socket:
                 print("sending reply to client")
-                is_done = self.client_connection.send_response(
-                    self.response_data, self.__set_activity
-                )
+                is_done = self.client_connection.send_response(self.response_data, self.__set_activity)
                 self.__update_buckets(time.time() - self.req_received_at)
                 if is_done:
                     self.selector.modify(
@@ -161,9 +148,7 @@ class Connection_Manager:
                     )
             elif event & selectors.EVENT_WRITE and fileobj is self.server_socket:
                 print("sending to server")
-                is_done = self.server_connection.send_request(
-                    self.request_data, self.__set_activity
-                )
+                is_done = self.server_connection.send_request(self.request_data, self.__set_activity)
                 if is_done:
                     self.selector.modify(
                         self.server_socket,
