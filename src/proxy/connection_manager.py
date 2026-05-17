@@ -1,6 +1,5 @@
 import selectors
 import bisect
-import traceback
 import socket
 import types
 import time
